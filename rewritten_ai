@@ -1,0 +1,153 @@
+from flask import Flask, request, render_template_string, jsonify
+import socket
+import whois
+import requests
+import json
+import random
+import datetime
+
+app = Flask(__name__)
+
+# Memory and AI State
+memory = {
+    "mood": random.choice(["calm", "focused", "curious"]),
+    "state": "active",
+    "user": "WebUser",
+    "note": ""
+}
+start_time = datetime.datetime.now()
+
+# Bootstrap 5 HTML Template
+HTML_TEMPLATE = '''
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Rewritten AI Security Assistant</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet" />
+  <style>
+    body {
+      background-color: #121212;
+      color: #0f0;
+    }
+    .form-control, .btn {
+      background-color: #222;
+      border: none;
+      color: #0f0;
+    }
+    .form-control::placeholder {
+      color: #555;
+    }
+    .response-box {
+      background-color: #000;
+      color: #0f0;
+      padding: 1rem;
+      font-family: monospace;
+      white-space: pre-wrap;
+      min-height: 300px;
+      border-radius: 5px;
+      margin-top: 1rem;
+      overflow-y: auto;
+    }
+  </style>
+</head>
+<body>
+  <div class="container py-5">
+    <h1 class="mb-4">🔐 Rewritten AI: Ethical Hacking Assistant</h1>
+    <form method="POST" class="mb-3">
+      <input
+        name="command"
+        class="form-control form-control-lg"
+        placeholder="Type a command (whois, ip lookup, port scan, etc.)"
+        autocomplete="off"
+        autofocus
+        value="{{ last_command | default('') }}"
+      />
+      <button type="submit" class="btn btn-success btn-lg mt-3">Send</button>
+    </form>
+    <div class="response-box">{{ response }}</div>
+  </div>
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>
+'''
+
+# Core AI + Tools Handler
+def handle_command(command):
+    cmd = command.lower().strip()
+
+    if "who are you" in cmd:
+        return f"I am Rewritten, your AI assistant. I feel {memory['mood']}."
+    elif "how do you feel" in cmd:
+        return f"My current mood is {memory['mood']}."
+    elif "uptime" in cmd:
+        return f"Uptime: {str(datetime.datetime.now() - start_time).split('.')[0]}"
+    elif cmd.startswith("remember"):
+        memory["note"] = command[8:].strip()
+        return "Note saved."
+    elif "what did you remember" in cmd:
+        return f"You told me: {memory['note']}"
+    elif cmd.startswith("ip lookup"):
+        parts = command.split()
+        if len(parts) < 3:
+            return "Usage: ip lookup [IP_ADDRESS]"
+        ip = parts[2]
+        try:
+            info = requests.get(f"https://ipinfo.io/{ip}/json").json()
+            return json.dumps(info, indent=2)
+        except:
+            return "IP lookup failed."
+    elif cmd.startswith("whois"):
+        parts = command.split()
+        if len(parts) < 2:
+            return "Usage: whois [domain]"
+        domain = parts[1]
+        try:
+            w = whois.whois(domain)
+            # Simplify output for display
+            data = {k: str(v) for k, v in w.items()}
+            return json.dumps(data, indent=2)
+        except:
+            return "WHOIS lookup failed."
+    elif cmd.startswith("port scan"):
+        parts = command.split()
+        if len(parts) < 3:
+            return "Usage: port scan [host]"
+        target = parts[2]
+        open_ports = []
+        try:
+            for port in range(1, 1025):
+                with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+                    s.settimeout(0.3)
+                    if s.connect_ex((target, port)) == 0:
+                        open_ports.append(port)
+            if open_ports:
+                return f"Open ports on {target}: {open_ports}"
+            else:
+                return f"No open ports found on {target} in range 1-1024."
+        except Exception as e:
+            return f"Scan failed: {str(e)}"
+    else:
+        return "Unknown command."
+
+# Flask Routes
+@app.route("/", methods=["GET", "POST"])
+def index():
+    response = "Hi, I'm Rewritten. Type a command."
+    last_command = ""
+    if request.method == "POST":
+        last_command = request.form.get("command", "")
+        response = handle_command(last_command)
+    return render_template_string(HTML_TEMPLATE, response=response, last_command=last_command)
+
+# API Endpoint for programmatic access
+@app.route("/api", methods=["POST"])
+def api():
+    data = request.json
+    command = data.get("command", "")
+    response = handle_command(command)
+    return jsonify({"response": response})
+
+if __name__ == "__main__":
+    app.run(host="0.0.0.0", port=5000)
