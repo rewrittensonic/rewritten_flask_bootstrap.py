@@ -1,0 +1,4 @@
+cd path/to/rewritten_ai
+git init
+git add .
+git commit -m "Initial commit for Rewritten AI"
